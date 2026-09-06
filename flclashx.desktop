@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=FlClashX
+Comment=Proxy GUI (Mesa software GL fix)
+Exec=env LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu LIBGL_ALWAYS_SOFTWARE=1 /usr/bin/FlClashX
+X-GNOME-Autostart-enabled=true
+Terminal=false
