@@ -249,8 +249,63 @@ env LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu LIBGL_ALWAYS_SOFTWARE=1 /usr/bin/
 > ⚠️ Обязательно прописать этот env в autostart-файл (см. [Раздел 3](#3-автозапуск-mate)),
 > иначе после перезагрузки окно снова будет чёрным.
 
+> ⚠️⚠️ **Версия 2 (06.09.2026): править нужно НЕ только autostart!**
+> Системный ярлык из deb-пакета `/usr/share/applications/FlClashX.desktop` содержит
+> `Exec=FlClashX %U` — **без** env. Если запускать FlClashX из меню/панели
+> («строка интернет»), окно снова будет чёрным. Исправить и его:
+> ```bash
+> sudo sed -i 's|^Exec=.*|Exec=env LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu LIBGL_ALWAYS_SOFTWARE=1 /usr/bin/FlClashX %U|' /usr/share/applications/FlClashX.desktop
+> ```
+> После этого ЛЮБОЙ запуск (меню, панель, автозапуск) идёт с фиксом.
+> Готовый файл: `system-FlClashX.desktop` в этом репозитории (положить в `/usr/share/applications/`).
+
 > Примечание: `LIBGL_ALWAYS_SOFTWARE=1` сам по себе не помогает (окно остаётся чёрным),
 > потому что Flutter тянет PVR libEGL напрямую. Ключевой фикс — именно `LD_LIBRARY_PATH`.
+
+---
+
+## 6b. Проблема: Chromium/браузер НЕ ходит через прокси (российский IP)
+
+### Симптомы
+- FlClashX запущен, порт 7890 слушается, `curl -x http://127.0.0.1:7890 https://api.ipify.org`
+  показывает зарубежный IP (например Швейцария `31.7.63.34`)
+- НО в Chromium `api.ipify.org` / `2ip.ru` показывают **российский IP** — браузер ходит напрямую
+- Заблокированные в РФ сайты (YouTube) не открываются: `ERR_FAILED`
+- Переключение регионов/узлов в FlClashX не помогает
+
+### Причина (06.09.2026, реальный случай на Zero 3W)
+В Chromium было установлено расширение **Proxy SwitchyOmega**
+(в Preferences: `omghfjlpggmjjaagoclmmobgdodcjboh`). Оно имеет право `proxy`
+и **перекрывает** и системный прокси (`gsettings`), и флаг запуска `--proxy-server` —
+браузер ходит напрямую, минуя FlClashX. Расширения без права `proxy` (например
+`enhanced-h264ify`) на маршрутизацию не влияют.
+
+Диагностика:
+```bash
+# какие расширения имеют право proxy:
+for d in ~/.config/chromium/Default/Extensions/*/; do
+  cat $d/*/manifest.json 2>/dev/null | grep -q '"proxy"' && echo "$d — имеет proxy-право!"
+done
+```
+
+### Решение
+Удалить/отключить расширение-прокси-менеджер (SwitchyOmega и т.п.):
+```bash
+# 1. закрыть Chromium, переименовать папку расширения (обратимо):
+mv ~/.config/chromium/Default/Extensions/omghfjlpggmjjaagoclmmobgdodcjboh{,.DISABLED}
+# 2. вычистить запись из Preferences (чтобы Chromium не пытался грузить):
+python3 - <<'EOF'
+import json
+p = '/home/USER/.config/chromium/Default/Preferences'
+d = json.load(open(p))
+d.get('extensions',{}).get('settings',{}).pop('omghfjlpggmjjaagoclmmobgdodcjboh', None)
+json.dump(d, open(p,'w'), indent=2)
+EOF
+# 3. запустить Chromium заново — трафик пойдёт через прокси FlClashX
+```
+
+Проверка: `https://api.ipify.org/?format=text` в Chromium должен показать
+зарубежный IP (тот же, что у `curl -x`).
 
 ---
 
@@ -279,12 +334,15 @@ curl -x http://127.0.0.1:7890 -sI https://api.telegram.org
    «updateGroups error» и мёртвый порт 7890.
 2. **Чёрный экран Flutter на PowerVR** — PVR-враппер libEGL из `/usr/local/lib`
    не умеет NPOT. Лечится `LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu` +
-   `LIBGL_ALWAYS_SOFTWARE=1` (обязательно и в autostart).
+   `LIBGL_ALWAYS_SOFTWARE=1` (обязательно и в autostart, И в системном ярлыке
+   `/usr/share/applications/FlClashX.desktop` — см. Раздел 6).
 3. **Автозапуск GUI-приложения** — только XDG autostart (MATE), не systemd-сервис.
 4. **Перенос профиля** — копируй папку `~/.local/share/com.follow.clashx/` целиком
    и **обязательно меняй HWID** (`flutter.app_persistent_hwid`) на новый UUID.
 5. **Прокси-зависимые сервисы** — ничего не менять: mixed-port 7890 тот же, что был
    у mihomo. Настроенные на localhost-прокси приложения продолжают работать.
+6. **Браузер ходит мимо прокси?** — ищи расширение с proxy-правом (SwitchyOmega):
+   оно перекрывает и системный прокси, и `--proxy-server`. Удалить и проверить IP.
 
 ---
 

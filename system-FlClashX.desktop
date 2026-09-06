@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=0.3.2+2026012301
+Name=FlClashX
+GenericName=FlClashX
+Comment=Proxy GUI (Mesa software GL fix — system launcher)
+Exec=env LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu LIBGL_ALWAYS_SOFTWARE=1 /usr/bin/FlClashX %U
+Icon=FlClashX
+Categories=Network;
+Keywords=FlClashX;Clash;ClashMeta;Proxy;
+StartupNotify=true
